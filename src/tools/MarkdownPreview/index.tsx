@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { marked } from 'marked';
+import { Marked } from 'marked';
+import hljs from 'highlight.js';
 import DOMPurify from 'dompurify';
 import { CopyButton } from '../../components/common/CopyButton';
 import { useToast } from '../../context/ToastContext';
@@ -42,14 +43,41 @@ export const MarkdownPreview: React.FC = () => {
   const [viewMode, setViewMode] = useState<'split' | 'edit' | 'preview'>('split');
   const { showToast } = useToast();
 
+  const markedInstance = useMemo(() => {
+    return new Marked({
+      gfm: true,
+      breaks: true,
+      renderer: {
+        code({ text, lang }: { text: string; lang?: string }) {
+          const validLang = lang && hljs.getLanguage(lang) ? lang : '';
+          const highlighted = validLang
+            ? hljs.highlight(text, { language: validLang }).value
+            : hljs.highlightAuto(text).value;
+          const displayLang = lang || 'code';
+
+          return `<div class="code-block my-4 rounded-xl border border-slate-700/80 bg-[#090d14] overflow-hidden shadow-lg">
+            <div class="flex items-center justify-between px-3.5 py-1.5 bg-slate-900 border-b border-slate-800 text-[11px] text-slate-400 font-mono">
+              <span class="text-emerald-400 font-semibold uppercase tracking-wider">${displayLang}</span>
+              <span class="text-slate-500">syntax highlighted</span>
+            </div>
+            <pre class="hljs p-4 overflow-x-auto text-xs leading-relaxed font-mono m-0 bg-transparent"><code>${highlighted}</code></pre>
+          </div>`;
+        },
+      },
+    });
+  }, []);
+
   const renderedHtml = useMemo(() => {
     try {
-      const rawHtml = marked.parse(markdown) as string;
-      return DOMPurify.sanitize(rawHtml);
+      const rawHtml = markedInstance.parse(markdown) as string;
+      return DOMPurify.sanitize(rawHtml, {
+        ADD_ATTR: ['target', 'class'],
+        ADD_TAGS: ['input'],
+      });
     } catch {
       return '<p class="text-rose-400">Failed to render markdown</p>';
     }
-  }, [markdown]);
+  }, [markdown, markedInstance]);
 
   const handleDownload = () => {
     const blob = new Blob([markdown], { type: 'text/markdown' });
@@ -131,7 +159,7 @@ export const MarkdownPreview: React.FC = () => {
               value={markdown}
               onChange={(e) => setMarkdown(e.target.value)}
               placeholder="Type Markdown content here..."
-              className="w-full h-[520px] p-4 bg-[#090d14] border border-slate-800 rounded-xl text-slate-200 font-mono text-xs leading-relaxed resize-none focus:outline-none focus:border-emerald-500/60"
+              className="w-full h-[540px] p-4 bg-[#090d14] border border-slate-800 rounded-xl text-slate-200 font-mono text-xs leading-relaxed resize-none focus:outline-none focus:border-emerald-500/60"
               spellCheck={false}
             />
           </div>
@@ -145,7 +173,7 @@ export const MarkdownPreview: React.FC = () => {
               <span className="text-emerald-400">GFM Compliant</span>
             </div>
             <div
-              className="w-full h-[520px] p-6 bg-[#090d14] border border-slate-800 rounded-xl overflow-y-auto prose prose-invert max-w-none prose-emerald prose-headings:text-slate-100 prose-headings:font-bold prose-p:text-slate-300 prose-code:text-emerald-300 prose-pre:bg-slate-900 prose-table:border-collapse prose-th:border prose-th:border-slate-800 prose-th:p-2 prose-td:border prose-td:border-slate-800 prose-td:p-2 text-xs leading-relaxed"
+              className="w-full h-[540px] p-6 bg-[#090d14] border border-slate-800 rounded-xl overflow-y-auto markdown-preview-content leading-relaxed"
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
             />
           </div>
